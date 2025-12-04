@@ -1,5 +1,5 @@
 ER DIAGRAM + NOMALIZATION PROCESS + DATA DICTIONARY + ASSUMPTIONS + BI CONSIDERATIONS
-```
+------
 <img width="2039" height="1718" alt="Untitled Diagram drawio (1)" src="https://github.com/user-attachments/assets/96721464-1ab0-47ac-bfff-7717762411f3" />
  ## **NORMALIZATION PROCESS: FROM UNNORMALIZED TO 3NF**
 
