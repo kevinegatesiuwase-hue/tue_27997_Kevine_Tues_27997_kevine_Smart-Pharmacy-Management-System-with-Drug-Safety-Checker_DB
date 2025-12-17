@@ -90,4 +90,4 @@ Phase V involved the implementation of the physical database schema and insertio
 - **Business Rules:** All safety and inventory rules validated (FIFO, interaction blocking).
     
 - **Referential Integrity:** All foreign key relationships are correctly maintained.
-   **Query Type Demonstrations**
+   ### **Query Type Demonstrations**
