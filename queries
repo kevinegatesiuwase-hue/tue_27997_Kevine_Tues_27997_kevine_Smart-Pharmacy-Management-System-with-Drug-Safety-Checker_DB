@@ -1,1 +1,14 @@
+smart_pharmacy_system/
+├── database/
+│   ├── scripts/
+│   │   ├── 01_create_tables.sql
+│   │   ├── 02_insert_data.sql
+│   │   └── 03_validation_queries.sql
+│   ├── queries/                    ← NEW FOLDER
+│   │   ├── data_retrieval.sql     # Basic SELECT queries
+│   │   ├── analytics_queries.sql  # Business intelligence
+│   │   └── audit_queries.sql      # Compliance & auditing
+│   ├── screenshots/
+│   └── docs/
+└── README.md
 
