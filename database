@@ -518,3 +518,68 @@ WHERE table_name IN (
     'PRESCRIPTION_LINES', 'DRUG_INTERACTIONS', 'DISPENSE_LOG',
     'AUDIT_LOG', 'STOCK_ALERTS', 'PHARMACISTS'
 );### **Query Type Demonstrations**
+
+-- Procedure to add new patient
+CREATE OR REPLACE PROCEDURE add_patient(
+    p_name IN VARCHAR2,
+    p_dob IN DATE,
+    p_gender IN CHAR,
+    p_phone IN VARCHAR2,
+    p_address IN VARCHAR2,
+    p_email IN VARCHAR2,
+    p_patient_id OUT NUMBER
+) AS
+BEGIN
+    SELECT seq_patients.NEXTVAL INTO p_patient_id FROM dual;
+    
+    INSERT INTO patients (patient_id, name, dob, gender, phone, address, email)
+    VALUES (p_patient_id, p_name, p_dob, p_gender, p_phone, p_address, p_email);
+    
+    COMMIT;
+END add_patient;
+/
+
+-- Procedure to dispense medication
+CREATE OR REPLACE PROCEDURE dispense_medication(
+    p_prescription_id IN NUMBER,
+    p_line_id IN NUMBER,
+    p_batch_id IN NUMBER,
+    p_qty IN NUMBER,
+    p_pharmacist_id IN NUMBER,
+    p_override_flag IN CHAR DEFAULT 'N',
+    p_override_reason IN VARCHAR2 DEFAULT NULL
+) AS
+    v_available_qty NUMBER;
+    v_expiry_date DATE;
+    v_patient_id NUMBER;
+    v_medication_id NUMBER;
+BEGIN
+    -- Check stock availability
+    SELECT qty_on_hand, expiry_date INTO v_available_qty, v_expiry_date
+    FROM batches WHERE batch_id = p_batch_id;
+    
+    IF v_available_qty < p_qty THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Insufficient stock available');
+    END IF;
+    
+    IF v_expiry_date < SYSDATE THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Batch has expired');
+    END IF;
+    
+    -- Log the dispense
+    INSERT INTO dispense_log (dispense_id, prescription_id, line_id, batch_id, qty_dispensed, dispense_date, pharmacist_id, override_flag, override_reason)
+    VALUES (seq_dispense_log.NEXTVAL, p_prescription_id, p_line_id, p_batch_id, p_qty, SYSDATE, p_pharmacist_id, p_override_flag, p_override_reason);
+    
+    -- Update batch quantity
+    UPDATE batches 
+    SET qty_on_hand = qty_on_hand - p_qty
+    WHERE batch_id = p_batch_id;
+    
+    -- Update prescription line
+    UPDATE prescription_lines
+    SET quantity_dispensed = quantity_dispensed + p_qty
+    WHERE line_id = p_line_id;
+    
+    COMMIT;
+END dispense_medication;
+/
