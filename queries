@@ -12,3 +12,24 @@ smart_pharmacy_system/
 │   └── docs/
 └── README.md
 
+ Sequences for auto-increment IDs
+CREATE SEQUENCE seq_medications START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_patients START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_batches START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_prescriptions START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_pres_lines START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_interactions START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_dispense_log START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_audit_log START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_stock_alerts START WITH 1000 INCREMENT BY 1;
+CREATE SEQUENCE seq_pharmacists START WITH 1000 INCREMENT BY 1;
+
+-- Synonyms for easier access
+CREATE SYNONYM meds FOR medications;
+CREATE SYNONYM pts FOR patients;
+CREATE SYNONYM rx FOR prescriptions;
+CREATE SYNONYM rx_lines FOR prescription_lines;
+CREATE SYNONYM interactions FOR drug_interactions;
+CREATE SYNONYM disp_log FOR dispense_log;
+CREATE SYNONYM alerts FOR stock_alerts;
+CREATE SYNONYM pharm FOR pharmacists;
