@@ -243,4 +243,278 @@ SELECT 'TOTAL TABLES CREATED: ' || COUNT(*) as summary
 FROM user_tables
 WHERE table_name IN ('MEDICATIONS', 'PATIENTS', 'BATCHES', 'PRESCRIPTIONS', 
                      'PRESCRIPTION_LINES', 'DRUG_INTERACTIONS', 'DISPENSE_LOG', 
-                     'AUDIT_LOG', 'STOCK_ALERTS');
+                     'AUDIT_LOG', 'STOCK_ALERTS');  
+
+FOR t IN (SELECT table_name FROM user_tables WHERE table_name IN (
+        'MEDICATIONS', 'PATIENTS', 'BATCHES', 'PRESCRIPTIONS',
+        'PRESCRIPTION_LINES', 'DRUG_INTERACTIONS', 'DISPENSE_LOG',
+        'AUDIT_LOG', 'STOCK_ALERTS', 'PHARMACISTS'
+    )) LOOP
+        EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name || ' CASCADE CONSTRAINTS';
+    END LOOP;
+END;
+/
+
+-- 2. CREATE TABLES WITHOUT PRIMARY KEYS
+CREATE TABLE medications (
+    medication_id NUMBER,
+    name VARCHAR2(255),
+    requires_prescription CHAR(1),
+    active_status VARCHAR2(20),
+    dosage_form VARCHAR2(50),
+    strength VARCHAR2(100),
+    manufacturer VARCHAR2(255)
+);
+
+CREATE TABLE patients (
+    patient_id NUMBER,
+    name VARCHAR2(255),
+    dob DATE,
+    gender CHAR(1),
+    phone VARCHAR2(20),
+    address VARCHAR2(500),
+    email VARCHAR2(100)
+);
+
+CREATE TABLE batches (
+    batch_id NUMBER,
+    medication_id NUMBER,
+    batch_number VARCHAR2(100),
+    expiry_date DATE,
+    qty_received NUMBER,
+    qty_on_hand NUMBER,
+    cost_price NUMBER(10,2),
+    received_date DATE
+);
+
+CREATE TABLE prescriptions (
+    prescription_id NUMBER,
+    patient_id NUMBER,
+    prescriber_name VARCHAR2(255),
+    prescriber_license VARCHAR2(100),
+    issue_date DATE,
+    status VARCHAR2(20),
+    created_date DATE
+);
+
+CREATE TABLE prescription_lines (
+    line_id NUMBER,
+    prescription_id NUMBER,
+    medication_id NUMBER,
+    quantity_prescribed NUMBER,
+    quantity_dispensed NUMBER,
+    instructions VARCHAR2(500),
+    days_supply NUMBER
+);
+
+CREATE TABLE drug_interactions (
+    interaction_id NUMBER,
+    med1_id NUMBER,
+    med2_id NUMBER,
+    severity VARCHAR2(20),
+    description VARCHAR2(1000),
+    recommendation VARCHAR2(500)
+);
+
+CREATE TABLE dispense_log (
+    dispense_id NUMBER,
+    prescription_id NUMBER,
+    line_id NUMBER,
+    batch_id NUMBER,
+    qty_dispensed NUMBER,
+    dispense_date DATE,
+    pharmacist_id NUMBER,
+    override_flag CHAR(1),
+    override_reason VARCHAR2(500)
+);
+
+CREATE TABLE audit_log (
+    log_id NUMBER,
+    table_name VARCHAR2(100),
+    operation VARCHAR2(10),
+    old_values CLOB,
+    new_values CLOB,
+    changed_by VARCHAR2(100),
+    changed_date DATE
+);
+
+CREATE TABLE stock_alerts (
+    alert_id NUMBER,
+    medication_id NUMBER,
+    alert_type VARCHAR2(20),
+    alert_date DATE,
+    message VARCHAR2(500),
+    resolved_flag CHAR(1),
+    resolved_date DATE,
+    resolved_by VARCHAR2(100)
+);
+
+CREATE TABLE pharmacists (
+    pharmacist_id NUMBER,
+    name VARCHAR2(255),
+    license_number VARCHAR2(100),
+    email VARCHAR2(100),
+    phone VARCHAR2(20),
+    active_status CHAR(1)
+);
+
+-- 3. ADD PRIMARY KEYS (Now this will work!)
+ALTER TABLE medications ADD CONSTRAINT pk_medications PRIMARY KEY (medication_id);
+ALTER TABLE patients ADD CONSTRAINT pk_patients PRIMARY KEY (patient_id);
+ALTER TABLE batches ADD CONSTRAINT pk_batches PRIMARY KEY (batch_id);
+ALTER TABLE prescriptions ADD CONSTRAINT pk_prescriptions PRIMARY KEY (prescription_id);
+ALTER TABLE prescription_lines ADD CONSTRAINT pk_pres_lines PRIMARY KEY (line_id);
+ALTER TABLE drug_interactions ADD CONSTRAINT pk_interactions PRIMARY KEY (interaction_id);
+ALTER TABLE dispense_log ADD CONSTRAINT pk_dispense_log PRIMARY KEY (dispense_id);
+ALTER TABLE audit_log ADD CONSTRAINT pk_audit_log PRIMARY KEY (log_id);
+ALTER TABLE stock_alerts ADD CONSTRAINT pk_stock_alerts PRIMARY KEY (alert_id);
+ALTER TABLE pharmacists ADD CONSTRAINT pk_pharmacists PRIMARY KEY (pharmacist_id);
+
+SELECT '✅ Step 1-3 Complete: Tables created and primary keys added' as status FROM dual;
+
+-- 4. ADD FOREIGN KEYS
+ALTER TABLE batches ADD CONSTRAINT fk_batch_med FOREIGN KEY (medication_id) REFERENCES medications(medication_id);
+ALTER TABLE prescriptions ADD CONSTRAINT fk_pres_patient FOREIGN KEY (patient_id) REFERENCES patients(patient_id);
+ALTER TABLE prescription_lines ADD CONSTRAINT fk_line_pres FOREIGN KEY (prescription_id) REFERENCES prescriptions(prescription_id);
+ALTER TABLE prescription_lines ADD CONSTRAINT fk_line_med FOREIGN KEY (medication_id) REFERENCES medications(medication_id);
+ALTER TABLE drug_interactions ADD CONSTRAINT fk_int_med1 FOREIGN KEY (med1_id) REFERENCES medications(medication_id);
+ALTER TABLE drug_interactions ADD CONSTRAINT fk_int_med2 FOREIGN KEY (med2_id) REFERENCES medications(medication_id);
+ALTER TABLE dispense_log ADD CONSTRAINT fk_disp_pres FOREIGN KEY (prescription_id) REFERENCES prescriptions(prescription_id);
+ALTER TABLE dispense_log ADD CONSTRAINT fk_disp_line FOREIGN KEY (line_id) REFERENCES prescription_lines(line_id);
+ALTER TABLE dispense_log ADD CONSTRAINT fk_disp_batch FOREIGN KEY (batch_id) REFERENCES batches(batch_id);
+ALTER TABLE dispense_log ADD CONSTRAINT fk_disp_pharmacist FOREIGN KEY (pharmacist_id) REFERENCES pharmacists(pharmacist_id);
+ALTER TABLE stock_alerts ADD CONSTRAINT fk_alert_med FOREIGN KEY (medication_id) REFERENCES medications(medication_id);
+
+SELECT '✅ Step 4 Complete: Foreign keys added' as status FROM dual;
+
+-- 5. ADD CHECK CONSTRAINTS
+-- Medications
+ALTER TABLE medications ADD CONSTRAINT chk_med_prescription CHECK (requires_prescription IN ('Y','N'));
+ALTER TABLE medications ADD CONSTRAINT chk_med_status CHECK (active_status IN ('ACTIVE','DISCONTINUED','OUT_OF_STOCK'));
+-- Patients
+ALTER TABLE patients ADD CONSTRAINT chk_patient_gender CHECK (gender IN ('M','F','O'));
+-- Batches
+ALTER TABLE batches ADD CONSTRAINT chk_batch_qty CHECK (qty_received >= 0 AND qty_on_hand >= 0);
+ALTER TABLE batches ADD CONSTRAINT chk_cost_price CHECK (cost_price >= 0);
+-- Prescriptions
+ALTER TABLE prescriptions ADD CONSTRAINT chk_pres_status CHECK (status IN ('PENDING','DISPENSED','CANCELLED','EXPIRED'));
+-- Prescription Lines
+ALTER TABLE prescription_lines ADD CONSTRAINT chk_line_qty CHECK (quantity_prescribed > 0 AND quantity_dispensed >= 0);
+ALTER TABLE prescription_lines ADD CONSTRAINT chk_dispensed_limit CHECK (quantity_dispensed <= quantity_prescribed);
+-- Drug Interactions
+ALTER TABLE drug_interactions ADD CONSTRAINT chk_int_severity CHECK (severity IN ('LOW','MODERATE','HIGH','CONTRAINDICATED'));
+ALTER TABLE drug_interactions ADD CONSTRAINT chk_med_order CHECK (med1_id < med2_id);
+-- Dispense Log
+ALTER TABLE dispense_log ADD CONSTRAINT chk_dispense_qty CHECK (qty_dispensed > 0);
+ALTER TABLE dispense_log ADD CONSTRAINT chk_override_flag CHECK (override_flag IN ('Y','N'));
+-- Stock Alerts
+ALTER TABLE stock_alerts ADD CONSTRAINT chk_alert_type CHECK (alert_type IN ('LOW_STOCK','NEAR_EXPIRY','EXPIRED','OVERSTOCK'));
+ALTER TABLE stock_alerts ADD CONSTRAINT chk_resolved_flag CHECK (resolved_flag IN ('Y','N'));
+-- Pharmacists
+ALTER TABLE pharmacists ADD CONSTRAINT chk_pharmacist_status CHECK (active_status IN ('Y','N'));
+
+SELECT '✅ Step 5 Complete: Check constraints added' as status FROM dual;
+
+-- 6. ADD UNIQUE CONSTRAINTS
+ALTER TABLE medications ADD CONSTRAINT uk_med_name UNIQUE (name);
+ALTER TABLE patients ADD CONSTRAINT uk_patient_phone UNIQUE (phone);
+ALTER TABLE batches ADD CONSTRAINT uk_batch_number UNIQUE (batch_number);
+ALTER TABLE drug_interactions ADD CONSTRAINT uk_interaction_pair UNIQUE (med1_id, med2_id);
+ALTER TABLE pharmacists ADD CONSTRAINT uk_pharmacist_license UNIQUE (license_number);
+ALTER TABLE pharmacists ADD CONSTRAINT uk_pharmacist_email UNIQUE (email);
+
+SELECT '✅ Step 6 Complete: Unique constraints added' as status FROM dual;
+
+-- 7. ADD NOT NULL CONSTRAINTS
+-- Medications
+ALTER TABLE medications MODIFY medication_id NOT NULL;
+ALTER TABLE medications MODIFY name NOT NULL;
+ALTER TABLE medications MODIFY requires_prescription NOT NULL;
+ALTER TABLE medications MODIFY active_status NOT NULL;
+-- Patients
+ALTER TABLE patients MODIFY patient_id NOT NULL;
+ALTER TABLE patients MODIFY name NOT NULL;
+ALTER TABLE patients MODIFY dob NOT NULL;
+ALTER TABLE patients MODIFY gender NOT NULL;
+ALTER TABLE patients MODIFY phone NOT NULL;
+-- Batches
+ALTER TABLE batches MODIFY batch_id NOT NULL;
+ALTER TABLE batches MODIFY medication_id NOT NULL;
+ALTER TABLE batches MODIFY batch_number NOT NULL;
+ALTER TABLE batches MODIFY expiry_date NOT NULL;
+ALTER TABLE batches MODIFY qty_received NOT NULL;
+ALTER TABLE batches MODIFY qty_on_hand NOT NULL;
+-- Prescriptions
+ALTER TABLE prescriptions MODIFY prescription_id NOT NULL;
+ALTER TABLE prescriptions MODIFY patient_id NOT NULL;
+ALTER TABLE prescriptions MODIFY prescriber_name NOT NULL;
+ALTER TABLE prescriptions MODIFY issue_date NOT NULL;
+ALTER TABLE prescriptions MODIFY status NOT NULL;
+ALTER TABLE prescriptions MODIFY created_date NOT NULL;
+-- Prescription Lines
+ALTER TABLE prescription_lines MODIFY line_id NOT NULL;
+ALTER TABLE prescription_lines MODIFY prescription_id NOT NULL;
+ALTER TABLE prescription_lines MODIFY medication_id NOT NULL;
+ALTER TABLE prescription_lines MODIFY quantity_prescribed NOT NULL;
+ALTER TABLE prescription_lines MODIFY quantity_dispensed NOT NULL;
+-- Drug Interactions
+ALTER TABLE drug_interactions MODIFY interaction_id NOT NULL;
+ALTER TABLE drug_interactions MODIFY med1_id NOT NULL;
+ALTER TABLE drug_interactions MODIFY med2_id NOT NULL;
+ALTER TABLE drug_interactions MODIFY severity NOT NULL;
+-- Dispense Log
+ALTER TABLE dispense_log MODIFY dispense_id NOT NULL;
+ALTER TABLE dispense_log MODIFY prescription_id NOT NULL;
+ALTER TABLE dispense_log MODIFY line_id NOT NULL;
+ALTER TABLE dispense_log MODIFY batch_id NOT NULL;
+ALTER TABLE dispense_log MODIFY qty_dispensed NOT NULL;
+ALTER TABLE dispense_log MODIFY dispense_date NOT NULL;
+ALTER TABLE dispense_log MODIFY pharmacist_id NOT NULL;
+ALTER TABLE dispense_log MODIFY override_flag NOT NULL;
+-- Audit Log
+ALTER TABLE audit_log MODIFY log_id NOT NULL;
+ALTER TABLE audit_log MODIFY table_name NOT NULL;
+ALTER TABLE audit_log MODIFY operation NOT NULL;
+ALTER TABLE audit_log MODIFY changed_by NOT NULL;
+ALTER TABLE audit_log MODIFY changed_date NOT NULL;
+-- Stock Alerts
+ALTER TABLE stock_alerts MODIFY alert_id NOT NULL;
+ALTER TABLE stock_alerts MODIFY medication_id NOT NULL;
+ALTER TABLE stock_alerts MODIFY alert_type NOT NULL;
+ALTER TABLE stock_alerts MODIFY alert_date NOT NULL;
+ALTER TABLE stock_alerts MODIFY message NOT NULL;
+ALTER TABLE stock_alerts MODIFY resolved_flag NOT NULL;
+-- Pharmacists
+ALTER TABLE pharmacists MODIFY pharmacist_id NOT NULL;
+ALTER TABLE pharmacists MODIFY name NOT NULL;
+ALTER TABLE pharmacists MODIFY license_number NOT NULL;
+ALTER TABLE pharmacists MODIFY email NOT NULL;
+ALTER TABLE pharmacists MODIFY phone NOT NULL;
+ALTER TABLE pharmacists MODIFY active_status NOT NULL;
+
+SELECT '✅ Step 7 Complete: NOT NULL constraints added' as status FROM dual;
+
+-- 8. ADD DEFAULT VALUES
+ALTER TABLE batches MODIFY received_date DEFAULT SYSDATE;
+ALTER TABLE prescriptions MODIFY issue_date DEFAULT SYSDATE;
+ALTER TABLE prescriptions MODIFY created_date DEFAULT SYSDATE;
+ALTER TABLE prescriptions MODIFY status DEFAULT 'PENDING';
+ALTER TABLE prescription_lines MODIFY quantity_dispensed DEFAULT 0;
+ALTER TABLE dispense_log MODIFY dispense_date DEFAULT SYSDATE;
+ALTER TABLE dispense_log MODIFY override_flag DEFAULT 'N';
+ALTER TABLE audit_log MODIFY changed_date DEFAULT SYSDATE;
+ALTER TABLE stock_alerts MODIFY alert_date DEFAULT SYSDATE;
+ALTER TABLE stock_alerts MODIFY resolved_flag DEFAULT 'N';
+ALTER TABLE pharmacists MODIFY active_status DEFAULT 'Y';
+
+SELECT '✅ Step 8 Complete: Default values added' as status FROM dual;
+
+-- 9. VERIFY EVERYTHING
+SELECT '🎉 DATABASE SETUP COMPLETE!' as message FROM dual;
+SELECT 'Total constraints created: ' || COUNT(*) as summary 
+FROM user_constraints 
+WHERE table_name IN (
+    'MEDICATIONS', 'PATIENTS', 'BATCHES', 'PRESCRIPTIONS',
+    'PRESCRIPTION_LINES', 'DRUG_INTERACTIONS', 'DISPENSE_LOG',
+    'AUDIT_LOG', 'STOCK_ALERTS', 'PHARMACISTS'
+);### **Query Type Demonstrations**
